@@ -69,7 +69,7 @@ export default function ProEditor({ setOuterStatus }) {
       const duration = Math.max(1, end - start);
       log(`Trimming ${start}s -> ${end}s`);
 
-\
+
   log(`Trimming ${start}s -> ${end}s`);
 
   // watermark
