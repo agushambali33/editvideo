@@ -12,8 +12,9 @@
     "next": "13.5.4",
     "react": "18.2.0",
     "react-dom": "18.2.0",
-    "@ffmpeg/ffmpeg": "0.12.6",
-    "axios": "1.4.0",
-    "clsx": "1.2.1"
+    "@ffmpeg/ffmpeg": "^0.12.6",
+    "@ffmpeg/util": "^0.12.2",
+    "axios": "^1.4.0",
+    "clsx": "^1.2.1"
   }
 }
