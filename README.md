@@ -1,0 +1,1 @@
+AutoReel Pro Advanced - debug-friendly editor. See previous messages for instructions.
