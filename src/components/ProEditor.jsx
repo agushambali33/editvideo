@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import axios from 'axios';
 import clsx from 'clsx';
 import { FFmpeg } from '@ffmpeg/ffmpeg';
@@ -19,22 +19,27 @@ export default function ProEditor({ setOuterStatus }) {
   const endRef = useRef(null);
   const ffmpegRef = useRef(null);
 
-  // log helper
+  // cleanup url
+  useEffect(() => {
+    return () => {
+      if (outputUrl) URL.revokeObjectURL(outputUrl);
+    };
+  }, [outputUrl]);
+
   const log = (msg) => {
     const t = new Date().toLocaleTimeString();
     setLogs((s) => [`[${t}] ${msg}`, ...s].slice(0, 200));
-    console.log(msg);
+    console.log('[ProEditor]', msg);
   };
 
-  // load ffmpeg
   const loadFfmpeg = async () => {
     if (ffmpegRef.current) return ffmpegRef.current;
 
     log('Loading ffmpeg.wasm...');
     const ffmpeg = new FFmpeg();
 
-    ffmpeg.on('progress', ({ progress }) => {
-      setProgress(`ffmpeg ${Math.round(progress * 100)}%`);
+    ffmpeg.on('progress', ({ ratio }) => {
+      setProgress(`ffmpeg ${Math.round(ratio * 100)}%`);
     });
 
     ffmpeg.on('log', ({ message }) => {
@@ -47,7 +52,6 @@ export default function ProEditor({ setOuterStatus }) {
     return ffmpeg;
   };
 
-  // handle file
   const handleFile = async (e) => {
     const f = e.target.files[0];
     setFile(f);
@@ -55,7 +59,6 @@ export default function ProEditor({ setOuterStatus }) {
     log(`Selected file: ${f?.name || 'none'}`);
   };
 
-  // copy to clipboard
   const copyToClipboard = async (text) => {
     try {
       await navigator.clipboard.writeText(text);
@@ -66,12 +69,11 @@ export default function ProEditor({ setOuterStatus }) {
     }
   };
 
-  // run processing
   const run = async () => {
     if (!file) return alert('Pilih file dulu');
     setLoading(true);
     setProgress('Starting...');
-    if (setOuterStatus) setOuterStatus('Processing');
+    setOuterStatus?.('Processing');
 
     try {
       const ffmpeg = await loadFfmpeg();
@@ -99,7 +101,7 @@ export default function ProEditor({ setOuterStatus }) {
           watermarkFound = true;
           log('Watermark loaded into FS');
         }
-      } catch (e) {
+      } catch {
         log('No watermark present');
       }
 
@@ -135,7 +137,7 @@ export default function ProEditor({ setOuterStatus }) {
         if (ttsRes.data?.audio) {
           log('TTS audio received');
           const audioBase64 = ttsRes.data.audio;
-          const audioBytes = Uint8Array.from(atob(audioBase64), c => c.charCodeAt(0));
+          const audioBytes = Uint8Array.from(atob(audioBase64), (c) => c.charCodeAt(0));
           await ffmpeg.writeFile(narration, audioBytes);
 
           setProgress('Merging audio...');
@@ -173,13 +175,13 @@ export default function ProEditor({ setOuterStatus }) {
       }
 
       setProgress('Done ✅');
-      if (setOuterStatus) setOuterStatus('Ready');
+      setOuterStatus?.('Ready');
     } catch (err) {
       console.error(err);
       log('Runtime error: ' + (err.message || String(err)));
       setProgress('Error: ' + (err.message || String(err)));
       alert('Terjadi error: ' + (err.message || String(err)));
-      if (setOuterStatus) setOuterStatus('Error');
+      setOuterStatus?.('Error');
     } finally {
       setLoading(false);
     }
@@ -203,7 +205,11 @@ export default function ProEditor({ setOuterStatus }) {
         log('Share failed: ' + e.message);
       }
     } else {
-      const fbUrl = 'https://www.facebook.com/sharer/sharer.php?u=' + encodeURIComponent(window.location.href) + '&quote=' + encodeURIComponent(text);
+      const fbUrl =
+        'https://www.facebook.com/sharer/sharer.php?u=' +
+        encodeURIComponent(window.location.href) +
+        '&quote=' +
+        encodeURIComponent(text);
       window.open(fbUrl, '_blank');
     }
   };
@@ -211,49 +217,67 @@ export default function ProEditor({ setOuterStatus }) {
   return (
     <div>
       <h3>Pro Editor</h3>
-      <div style={{marginTop:10}} className="row">
+      <div style={{ marginTop: 10 }} className="row">
         <input className="input" type="file" accept="video/*" onChange={handleFile} />
       </div>
 
-      <div style={{marginTop:10}} className="row">
+      <div style={{ marginTop: 10 }} className="row">
         <label className="small">Start</label>
         <input className="input" defaultValue={0} ref={startRef} type="number" />
         <label className="small">End</label>
         <input className="input" defaultValue={15} ref={endRef} type="number" />
       </div>
 
-      <div style={{marginTop:10}} className="controls">
-        <label><input type="checkbox" checked={enableWatermark} onChange={(e)=>setEnableWatermark(e.target.checked)} /> Watermark</label>
-        <label><input type="checkbox" checked={useVoice} onChange={(e)=>setUseVoice(e.target.checked)} /> AI Voiceover</label>
+      <div style={{ marginTop: 10 }} className="controls">
+        <label>
+          <input type="checkbox" checked={enableWatermark} onChange={(e) => setEnableWatermark(e.target.checked)} /> Watermark
+        </label>
+        <label>
+          <input type="checkbox" checked={useVoice} onChange={(e) => setUseVoice(e.target.checked)} /> AI Voiceover
+        </label>
       </div>
 
-      <div style={{marginTop:10}} className="row">
-        <button className="action-btn" onClick={run} disabled={loading}>{loading ? 'Processing...' : 'Run Auto-Process'}</button>
-        <button className="secondary" onClick={()=>{ setCaption(''); setHashtags(''); setOutputUrl(null); setLogs([]); }}>Reset</button>
+      <div style={{ marginTop: 10 }} className="row">
+        <button className="action-btn" onClick={run} disabled={loading}>
+          {loading ? 'Processing...' : 'Run Auto-Process'}
+        </button>
+        <button
+          className="secondary"
+          onClick={() => {
+            setCaption('');
+            setHashtags('');
+            setOutputUrl(null);
+            setLogs([]);
+          }}
+        >
+          Reset
+        </button>
       </div>
 
-      <div style={{marginTop:10}} className="small">Progress: <strong>{progress}</strong></div>
+      <div style={{ marginTop: 10 }} className="small">
+        Progress: <strong>{progress}</strong>
+      </div>
 
       <div className="debug">
         <strong>Logs</strong>
-        <div>{logs.map((l,i)=>(<div key={i}>{l}</div>))}</div>
+        <div>{logs.map((l, i) => (<div key={i}>{l}</div>))}</div>
       </div>
 
       {outputUrl && (
-        <div style={{marginTop:12}} className="preview">
+        <div style={{ marginTop: 12 }} className="preview">
           <h4>Preview</h4>
           <video src={outputUrl} controls />
-          <div style={{marginTop:8, display:'flex', gap:8}}>
+          <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
             <button className="action-btn" onClick={downloadOutput}>Download Video</button>
-            <button className="secondary" onClick={()=>copyToClipboard(hashtags)}>Copy Hashtags</button>
+            <button className="secondary" onClick={() => copyToClipboard(hashtags)}>Copy Hashtags</button>
             <button className="secondary" onClick={shareHelpers}>Share / Post</button>
           </div>
 
-          <div style={{marginTop:12}}>
+          <div style={{ marginTop: 12 }}>
             <h4>Caption (edit if needed)</h4>
-            <textarea className="input" rows={3} value={caption} onChange={(e)=>setCaption(e.target.value)} />
+            <textarea className="input" rows={3} value={caption} onChange={(e) => setCaption(e.target.value)} />
             <h4>Hashtags</h4>
-            <input className="input" value={hashtags} onChange={(e)=>setHashtags(e.target.value)} />
+            <input className="input" value={hashtags} onChange={(e) => setHashtags(e.target.value)} />
           </div>
         </div>
       )}
